@@ -1,0 +1,110 @@
+---
+# Karpenter NodePool for x86 (Intel/AMD)
+# NOTE: Instance types and limits are sized for test/POC purposes
+# For production workloads, consider upgrading to t3.large, t3.xlarge or larger
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: x86-pool
+  namespace: karpenter
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          # Test task uses smaller instances: t3.micro (1 vCPU), t3.small (2 vCPU), t3.medium (2 vCPU)
+          # For production, consider: t3.large (2 vCPU), t3.xlarge (4 vCPU), etc.
+          values: ["t3.micro", "t3.small", "t3.medium"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+  # Resource limits: Total max CPU and memory across all nodes in this pool
+  # 20 CPU cores = sum of all node vCPUs (e.g., 10 t3.micro nodes with 1 vCPU each = 10 cores)
+  # Once reached, Karpenter stops provisioning new nodes for this pool
+  # For production: increase to match expected workload (e.g., 100 cores for 50 t3.xlarge nodes)
+  limits:
+    cpu: "20"
+    memory: 20Gi
+  disruption:
+    consolidateAfter: 30s
+    consolidationPolicy: WhenEmptyOrUnderutilized
+---
+# Karpenter NodePool for arm64 (Graviton)
+# NOTE: Instance types and limits are sized for test/POC purposes
+# For production workloads, consider upgrading to t4g.large, t4g.xlarge or larger
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: arm64-pool
+  namespace: karpenter
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["arm64"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          # Test task uses smaller Graviton instances: t4g.micro (1 vCPU), t4g.small (2 vCPU), t4g.medium (2 vCPU)
+          # For production, consider: t4g.large (2 vCPU), t4g.xlarge (4 vCPU), etc.
+          values: ["t4g.micro", "t4g.small", "t4g.medium"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+  # Resource limits: Total max CPU and memory across all nodes in this pool
+  # 20 CPU cores = sum of all node vCPUs (e.g., 10 t4g.micro nodes with 1 vCPU each = 10 cores)
+  # Once reached, Karpenter stops provisioning new nodes for this pool
+  # For production: increase to match expected workload (e.g., 100 cores for 50 t4g.xlarge nodes)
+  limits:
+    cpu: "20"
+    memory: 20Gi
+  disruption:
+    consolidateAfter: 30s
+    consolidationPolicy: WhenEmptyOrUnderutilized
+---
+# EC2NodeClass for Karpenter
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+  namespace: karpenter
+spec:
+  # Use alias for automatic AMI discovery and proper AL2023 nodeadm userdata generation
+  # Karpenter auto-discovers cluster endpoint, CA,  and CIDR when using alias
+  amiSelectorTerms:
+    - alias: al2023@latest
+  # IAM role name (not instance profile) - Karpenter manages the instance profile
+  role: ${NODE_ROLE_NAME}
+  # userData to explicitly call nodeadm - required for AL2023 AMIs with Karpenter
+  userData: |
+    #!/bin/bash
+    /usr/bin/nodeadm init
+  subnetSelectorTerms:
+    - tags:
+        kubernetes.io/cluster/${CLUSTER_NAME}: "shared"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery/${CLUSTER_NAME}: ${CLUSTER_NAME}
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 100Gi
+        volumeType: gp3
+        deleteOnTermination: true
+  metadataOptions:
+    httpEndpoint: enabled
+    httpProtocolIPv6: disabled
+    httpPutResponseHopLimit: 2

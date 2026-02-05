@@ -1,0 +1,92 @@
+---
+# Test application deployment for x86 architecture
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-x86
+  labels:
+    app: nginx-x86
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-x86
+  template:
+    metadata:
+      labels:
+        app: nginx-x86
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+---
+# Service for x86 nginx
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-x86
+spec:
+  selector:
+    app: nginx-x86
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP
+---
+# Test application deployment for arm64 architecture (Graviton)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-graviton
+  labels:
+    app: nginx-graviton
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-graviton
+  template:
+    metadata:
+      labels:
+        app: nginx-graviton
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+---
+# Service for Graviton nginx
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-graviton
+spec:
+  selector:
+    app: nginx-graviton
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP
