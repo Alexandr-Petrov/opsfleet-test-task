@@ -5,7 +5,7 @@ resource "aws_eks_node_group" "karpenter_system" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.cluster_name}-karpenter-system"
   node_role_arn   = aws_iam_role.node.arn
-  subnet_ids      = aws_subnet.private[*].id
+  subnet_ids      = values(aws_subnet.private)[*].id
   version         = var.cluster_version
 
   scaling_config {
